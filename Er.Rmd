@@ -1,0 +1,156 @@
+
+```{r}
+# Load required packages
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(rfm)
+library(lubridate)
+library(DT)
+
+# Read the data into a data frame
+data <- read.csv("Shine.Case.Data_2022S.csv")
+
+head(data)
+str(data)
+sapply(data,class)
+
+length(unique(data$id)) #no of unique customers
+length(unique(data$sku))
+# Explore the data
+
+data$spending= data$quantity*data$price
+data$Date <- as.Date(data$transaction.date)
+str(data$Date)
+head(data)
+
+
+data$id=as.factor(data$id)
+#group by consumers, create frequency, transaction amount and time of last purchase
+data.c=data %>% group_by(id) %>%
+summarize(recency=as.numeric(as.Date("2017-07-20")-max(Date)),
+frequenci=n_distinct(transaction.date),
+monetary= sum(spending)/frequenci,
+monetary1=sum(spending))%>%ungroup
+str(data.c)
+
+ggplot(data.c,aes(x=recency))+
+geom_histogram(binwidth = 0.8,fill="plum") + labs(x = "Number of Days",y="Counts")+ ggtitle("Histogram:Recency") +
+theme(plot.title = element_text(hjust = 0.5),
+legend.title = element_blank(),
+panel.grid.minor.y = element_blank())+coord_cartesian(xlim=c(0,300))
+
+
+
+ggplot(data.c,aes(x=frequenci))+
+geom_histogram(binwidth = 1,fill="sandybrown") + labs(x = "No. of transactions",y="Counts")+ ggtitle("Histogram: Frequenc
+y") +
+theme(plot.title = element_text(hjust = 0.5),
+legend.title = element_blank(),
+panel.grid.minor.y = element_blank())+coord_cartesian(xlim=c(0,50))
+
+ggplot(data.c,aes(x=monetary))+
+geom_histogram(binwidth = 30,fill="dodgerblue") + labs(x = "Average spending",y="Counts")+ ggtitle("Histogram: Monetary") +
+theme(plot.title = element_text(hjust = 0.5),
+legend.title = element_blank(),
+panel.grid.minor.y = element_blank())+coord_cartesian(xlim=c(0,5000))
+
+rfm_bar_chart(rfm.result)
+rfm_histograms(rfm.result)
+rfm.result = rfm_table_customer(data.c, id, frequenci,recency, monetary, analysis_date='2021‐11‐24',recency_bins = 2, frequency_bins = 2,monetary_bins =2)
+#some plots
+rfm_heatmap(rfm.result)
+rfm_order_dist(rfm.result)
+rfm_rm_plot(rfm.result)
+rfm_fm_plot(rfm.result)
+
+rfm_rf_plot(rfm.result)
+
+two.bin.df=rfm.result$rfm#create a new df based RFM result
+head(two.bin.df,10)# take a look at the first 10 rows
+
+#Histogram plot of rfm_scores
+two.bin.df%>%arrange(desc(rfm_score))%>%
+ggplot(aes(x=rfm_score))+
+geom_histogram(binwidth = 1,fill="mediumturquoise") + labs(x = "RFM score",y="Counts")+ ggtitle("Histogram: RFM Score") +
+theme(plot.title = element_text(hjust = 0.5),
+legend.title = element_blank(),
+panel.grid.minor.y = element_blank())+coord_cartesian(xlim=c(100,250))
+
+
+two.bin.df=two.bin.df%>%
+mutate(
+segment = case_when(
+(recency_score==2) & (frequency_score ==2) & (monetary_score ==2) ~ "VIP V",
+(recency_score ==1) & (frequency_score ==2) & (monetary_score ==2) ~ "VIP II",
+(recency_score ==2) & (frequency_score ==1) & (monetary_score ==2) ~ "VIP III",
+(recency_score ==1) & (frequency_score ==1) & (monetary_score ==2) ~ "VIP I",
+(recency_score ==2) & (frequency_score ==2) & (monetary_score ==1) ~ "VIP IV",
+(recency_score ==1) & (frequency_score ==2) & (monetary_score ==1) ~ "Regular customers",
+(recency_score ==2) & (frequency_score ==1) & (monetary_score ==1) ~ "Regular customers",
+(recency_score ==1) & (frequency_score ==1) & (monetary_score ==1) ~ "Potential customers",
+TRUE~"Other")
+) %>%select(
+customer_id,segment, rfm_score, recency_score,frequency_score,monetary_score,transaction_count, recency_days, amount)
+two.bin.df$segment <- ordered(two.bin.df$segment, levels = c( "VIP V","VIP IV", "VIP III","VIP II","VIP I","Regular customers","Potential customers"))#
+table(two.bin.df$segment)
+
+library(DT)
+# use DT package to generate an excellent SQL database is created
+two.bin.df$amount=round(two.bin.df$amount,1)#round the amount
+names(two.bin.df)
+
+two.bin.df %>%
+select(customer_id,segment, recency_days, transaction_count, amount,rfm_score,)%>%
+datatable(
+filter = "top",
+options = list(pageLength = 15, autoWidth = TRUE),
+colnames = c(
+"ID", "Cohorts", "Recency Days","Total Orders", "Order amount","RFM Score"
+))
+
+
+seg.size.df= as.data.frame(table(two.bin.df$segment)) %>% setNames(c("Segment","Freq"))#compute the frequency table.
+ggplot(seg.size.df, aes(x=Segment,fill=Segment)) + geom_bar(aes(weight=Freq))
+
+ggplot(seg.size.df, aes(x=Segment,y=Freq,fill=Segment)) + geom_bar(stat = "identity")
+
+ggplot(seg.size.df, aes(x= Segment,y= Freq,fill=Segment)) + geom_col()
+
+
+ggplot(seg.size.df, aes(x=Segment,fill=Segment)) + geom_bar(aes(weight=Freq), width=.5)+
+labs(x = "Segments",y="Segment size")+ ggtitle("RFM")+theme(axis.text.x = element_text(face=NULL, color="navy",size=12, angle=15),axis.text.y = element_text(face=NULL, color="indianred",size=19, angle=12))
+
+#Pie chart
+ggplot(seg.size.df, aes(x="", fill=Segment)) + geom_bar(aes(weight=Freq), width=.5,position="fill")+coord_polar("y", start=0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
